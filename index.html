@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Detector - Yosia Edmund Herlianto</title>
+    <style>
+        /* Modern Reset & Base Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+
+        /* Card Container (Glassmorphism effect) */
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        h1 { margin-bottom: 0.5rem; color: #4a4a4a; }
+        .subtitle { font-size: 0.9rem; color: #666; margin-bottom: 1.5rem; }
+
+        /* Button Styling */
+        .btn-start {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 1rem;
+        }
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        /* Webcam Wrapper */
+        #webcam-container {
+            margin: 1rem auto;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        canvas { display: block; width: 100%; }
+
+        /* Label / Results Styling */
+        #label-container {
+            margin-top: 1rem;
+            text-align: left;
+        }
+        .prediction-bar {
+            background: #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            overflow: hidden;
+            position: relative;
+            height: 30px;
+        }
+        .bar-fill {
+            height: 100%;
+            background: #764ba2;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .bar-text {
+            position: absolute;
+            top: 50%;
+            left: 10px;
+            transform: translateY(-50%);
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 2;
+            color: #333;
+        }
+
+        footer {
+            margin-top: 2rem;
+            font-size: 0.8rem;
+            color: #888;
+            border-top: 1px solid #eee;
+            padding-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>AI Detector</h1>
+        <p class="subtitle">Project Kecerdasan Buatan</p>
+        
+        <button class="btn-start" type="button" onclick="init()">Mulai Kamera</button>
+        
+        <div id="webcam-container"></div>
+        <div id="label-container"></div>
+
+        <footer>
+            Dibuat oleh: <strong>Yosia Edmund Herlianto</strong><br>
+            Kelas: 12 SMA
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/0h5T9dqIy/";
+
+        let model, webcam, labelContainer, maxPredictions;
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = true; 
+            webcam = new tmImage.Webcam(250, 250, flip); 
+            await webcam.setup(); 
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            
+            // Bersihkan label container sebelum nambah baru (biar ga numpuk kalau diklik 2x)
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = ""; 
+            
+            for (let i = 0; i < maxPredictions; i++) {
+                // Membuat struktur bar progress custom
+                let div = document.createElement("div");
+                div.className = "prediction-bar";
+                div.innerHTML = `
+                    <div class="bar-fill" id="bar-${i}"></div>
+                    <span class="bar-text" id="text-${i}">Waiting...</span>
+                `;
+                labelContainer.appendChild(div);
+            }
+            
+            // Hilangkan tombol setelah diklik agar rapi
+            document.querySelector('.btn-start').style.display = 'none';
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + (prediction[i].probability * 100).toFixed(0) + "%";
+                
+                // Update Text
+                document.getElementById("text-" + i).innerText = classPrediction;
+                
+                // Update Bar Width (Visual)
+                const percentage = (prediction[i].probability * 100) + "%";
+                document.getElementById("bar-" + i).style.width = percentage;
+                
+                // Ganti warna bar kalau probabilitas tinggi (>80%)
+                if(prediction[i].probability > 0.8){
+                    document.getElementById("bar-" + i).style.backgroundColor = "#48bb78"; // Hijau
+                    document.getElementById("text-" + i).style.color = "white";
+                } else {
+                    document.getElementById("bar-" + i).style.backgroundColor = "#764ba2"; // Ungu default
+                    document.getElementById("text-" + i).style.color = "#333";
+                }
+            }
+        }
+    </script>
+</body>
+</html>

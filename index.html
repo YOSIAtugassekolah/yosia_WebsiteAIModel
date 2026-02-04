@@ -3,84 +3,136 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Detector - Yosia</title>
+<title>Fruit Detector AI</title>
 
 <!-- TensorFlow & Teachable Machine -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 
 <style>
+* { box-sizing: border-box; }
+
 body {
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    font-family: 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #43cea2, #185a9d);
     min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     margin: 0;
 }
+
 .container {
-    background: white;
-    padding: 20px;
-    max-width: 420px;
-    width: 90%;
-    border-radius: 16px;
+    background: rgba(255,255,255,0.96);
+    padding: 24px;
+    max-width: 480px;
+    width: 92%;
+    border-radius: 22px;
     text-align: center;
-    box-shadow: 0 10px 30px rgba(0,0,0,.2);
+    box-shadow: 0 20px 45px rgba(0,0,0,.25);
 }
+
+h1 {
+    margin: 0;
+    color: #185a9d;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: #555;
+}
+
+.badge {
+    background: #e6fffa;
+    color: #065f46;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    display: inline-block;
+    margin: 14px 0;
+}
+
 button {
-    background: #667eea;
+    background: linear-gradient(135deg, #43cea2, #36a2eb);
     color: white;
     border: none;
-    padding: 10px 18px;
-    border-radius: 20px;
+    padding: 11px 22px;
+    border-radius: 25px;
     cursor: pointer;
-    margin: 5px;
+    font-weight: bold;
+    margin: 6px;
 }
+
 button:hover { opacity: .9; }
 
-#webcam-container, img {
+input[type=file] {
     margin-top: 10px;
-    border-radius: 10px;
+}
+
+#webcam-container canvas,
+#preview {
     width: 100%;
+    margin-top: 14px;
+    border-radius: 16px;
+    border: 2px solid #e5e7eb;
 }
 
 .prediction-bar {
-    background: #eee;
-    border-radius: 8px;
-    margin-top: 8px;
-    height: 26px;
+    background: #e5e7eb;
+    border-radius: 12px;
+    margin-top: 10px;
+    height: 30px;
     position: relative;
     overflow: hidden;
 }
+
 .bar-fill {
     height: 100%;
     width: 0%;
-    background: #764ba2;
-    transition: width .3s;
+    background: linear-gradient(135deg, #f7971e, #ffd200);
+    transition: width .4s ease;
 }
+
 .bar-text {
     position: absolute;
-    left: 10px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
     font-size: 13px;
     font-weight: bold;
+    color: #333;
 }
+
+.other {
+    background: linear-gradient(135deg, #9ca3af, #6b7280);
+}
+
+.note {
+    margin-top: 14px;
+    font-size: 12px;
+    color: #555;
+}
+
 footer {
+    margin-top: 18px;
     font-size: 12px;
     color: #777;
-    margin-top: 15px;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 10px;
 }
 </style>
 </head>
 
 <body>
 <div class="container">
-    <h2>AI Detector</h2>
-    <p>Webcam & Upload Image</p>
+    <h1>🍎 Fruit Detector AI</h1>
+    <p class="subtitle">Image Recognition dengan Teachable Machine</p>
 
-    <button onclick="startWebcam()">🎥 Kamera</button>
+    <div class="badge">
+        Mendeteksi: 🍉 Watermelon · 🍅 Tomato · 🥭 Mango · 🍋 Lemon · 🥝 Kiwi · 🍌 Banana
+    </div>
+
+    <button onclick="startWebcam()">🎥 Gunakan Kamera</button><br>
     <input type="file" accept="image/*" onchange="predictUpload(event)">
 
     <div id="webcam-container"></div>
@@ -88,14 +140,19 @@ footer {
 
     <div id="label-container"></div>
 
+    <p class="note">
+        Jika buah di luar data training, sistem akan menampilkan <b>OTHER FRUIT</b>.
+    </p>
+
     <footer>
         Dibuat oleh <b>Yosia Edmund Herlianto</b><br>
-        Project AI
+        Project Kecerdasan Buatan
     </footer>
 </div>
 
 <script>
-const MODEL_URL = "https://teachablemachine.withgoogle.com/models/NWKfrLufm/";
+const MODEL_URL = "https://teachablemachine.withgoogle.com/models/uBjyWBBu4/";
+const THRESHOLD = 0.6; // 60% confidence
 
 let model, webcam, maxPredictions;
 
@@ -105,22 +162,12 @@ async function loadModel() {
         MODEL_URL + "metadata.json"
     );
     maxPredictions = model.getTotalClasses();
-
-    const labelContainer = document.getElementById("label-container");
-    labelContainer.innerHTML = "";
-    for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.innerHTML += `
-        <div class="prediction-bar">
-            <div class="bar-fill" id="bar-${i}"></div>
-            <div class="bar-text" id="text-${i}">-</div>
-        </div>`;
-    }
 }
 loadModel();
 
 // ===== WEBCAM =====
 async function startWebcam() {
-    webcam = new tmImage.Webcam(300, 300, true);
+    webcam = new tmImage.Webcam(320, 320, true);
     await webcam.setup();
     await webcam.play();
     document.getElementById("webcam-container").innerHTML = "";
@@ -141,14 +188,38 @@ async function predictUpload(event) {
     img.onload = () => predict(img);
 }
 
-// ===== PREDICT =====
+// ===== PREDICT + OTHER FRUIT LOGIC =====
 async function predict(source) {
     const prediction = await model.predict(source);
-    prediction.forEach((p, i) => {
-        document.getElementById(`text-${i}`).innerText =
-            `${p.className} ${(p.probability*100).toFixed(0)}%`;
-        document.getElementById(`bar-${i}`).style.width =
-            (p.probability*100) + "%";
+
+    let best = prediction.reduce((a, b) =>
+        a.probability > b.probability ? a : b
+    );
+
+    const labelContainer = document.getElementById("label-container");
+    labelContainer.innerHTML = "";
+
+    // Jika confidence rendah → OTHER FRUIT
+    if (best.probability < THRESHOLD) {
+        labelContainer.innerHTML = `
+        <div class="prediction-bar">
+            <div class="bar-fill other" style="width:100%"></div>
+            <div class="bar-text">
+                OTHER FRUIT 🍏 (Data belum tersedia)
+            </div>
+        </div>`;
+        return;
+    }
+
+    // Jika confidence tinggi → tampilkan semua class
+    prediction.forEach(p => {
+        labelContainer.innerHTML += `
+        <div class="prediction-bar">
+            <div class="bar-fill" style="width:${(p.probability*100).toFixed(0)}%"></div>
+            <div class="bar-text">
+                ${p.className} ${(p.probability*100).toFixed(0)}%
+            </div>
+        </div>`;
     });
 }
 </script>
